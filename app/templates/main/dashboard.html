@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - TaskFlow Pro{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">Panel Principal</h2>
+        <p class="text-muted">Resumen rápido de tus actividades, estado de jornada y métricas.</p>
+    </div>
+    <div>
+        {% if jornada_hoy %}
+            {% if jornada_hoy.estado == 'Abierta' %}
+                <a href="{{ url_for('daily.index') }}" class="btn btn-success">
+                    <i class="bi bi-play-circle-fill me-2"></i>Jornada Activa (Ir al Panel)
+                </a>
+            {% else %}
+                <span class="badge bg-secondary p-2 fs-6">
+                    <i class="bi bi-check-circle-fill me-1"></i>Jornada Cerrada de Hoy
+                </span>
+            {% endif %}
+        {% else %}
+            <a href="{{ url_for('daily.index') }}" class="btn btn-primary">
+                <i class="bi bi-calendar-plus-fill me-2"></i>Iniciar Jornada de Hoy
+            </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Tarjetas de Resumen de Tareas -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-warning">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted text-uppercase small fw-bold">Pendientes</span>
+                        <h3 class="fw-bold mb-0 text-dark">{{ tareas_pendientes }}</h3>
+                    </div>
+                    <div class="bg-warning-subtle text-warning p-3 rounded-circle">
+                        <i class="bi bi-clock-history fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-primary">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted text-uppercase small fw-bold">En Progreso</span>
+                        <h3 class="fw-bold mb-0 text-dark">{{ tareas_en_progreso }}</h3>
+                    </div>
+                    <div class="bg-primary-subtle text-primary p-3 rounded-circle">
+                        <i class="bi bi-arrow-repeat fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-danger">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted text-uppercase small fw-bold">Bloqueadas</span>
+                        <h3 class="fw-bold mb-0 text-dark">{{ tareas_bloqueadas }}</h3>
+                    </div>
+                    <div class="bg-danger-subtle text-danger p-3 rounded-circle">
+                        <i class="bi bi-exclamation-triangle fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-success">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="text-muted text-uppercase small fw-bold">Completadas</span>
+                        <h3 class="fw-bold mb-0 text-dark">{{ tareas_completadas }}</h3>
+                    </div>
+                    <div class="bg-success-subtle text-success p-3 rounded-circle">
+                        <i class="bi bi-check-circle fs-4"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Tareas Vencidas o Próximas a Vencer -->
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-white py-3 border-0">
+                <h5 class="fw-bold mb-0 text-danger"><i class="bi bi-alarm-fill me-2"></i>Alertas de Vencimiento</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if proximas_vencer %}
+                <div class="list-group list-group-flush">
+                    {% for t in proximas_vencer %}
+                    <a href="{{ url_for('projects.detail_task', task_id=t.id) }}" class="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1 fw-bold text-dark">{{ t.titulo }}</h6>
+                            <small class="text-muted"><i class="bi bi-folder me-1"></i>{{ t.macrotarea.proyecto.nombre }} / {{ t.macrotarea.nombre }}</small>
+                        </div>
+                        <span class="badge bg-danger-subtle text-danger p-2 fs-7">
+                            <i class="bi bi-clock me-1"></i>Venció: {{ t.fecha_limite.strftime('%Y-%m-%d %H:%M') if t.fecha_limite else 'N/A' }}
+                        </span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-shield-check fs-1 text-success d-block mb-2"></i>
+                    No tienes tareas atrasadas o vencidas en este momento.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Proyectos Activos -->
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-folder-fill text-primary me-2"></i>Proyectos Activos</h5>
+                <a href="{{ url_for('projects.list_projects') }}" class="btn btn-sm btn-link text-decoration-none">Ver todos</a>
+            </div>
+            <div class="card-body p-0">
+                {% if proyectos_activos %}
+                <div class="list-group list-group-flush">
+                    {% for p in proyectos_activos %}
+                    <a href="{{ url_for('projects.detail_project', project_id=p.id) }}" class="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0 fw-bold text-dark">{{ p.nombre }}</h6>
+                            <small class="text-muted">{{ p.macrotareas|length }} Macrotareas</small>
+                        </div>
+                        <span class="badge bg-success">Activo</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-folder-x fs-1 text-secondary d-block mb-2"></i>
+                    No hay proyectos registrados aún.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

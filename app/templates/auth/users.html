@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Usuarios - Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-people-fill text-primary me-2"></i>Gestión de Usuarios</h2>
+        <p class="text-muted">Crea y administra las cuentas y roles del equipo (Admin, Desarrollador, Comercial).</p>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoUsuario">
+        <i class="bi bi-person-plus-fill me-2"></i>Nuevo Usuario
+    </button>
+</div>
+
+<div class="card shadow-sm border-0 rounded-3">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Nombre</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                        <th>Fecha de Alta</th>
+                        <th class="text-end pe-4">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-dark">{{ u.nombre }}</td>
+                        <td>{{ u.email }}</td>
+                        <td>
+                            {% if u.rol == 'admin' %}
+                                <span class="badge bg-danger">Admin</span>
+                            {% elif u.rol == 'comercial' %}
+                                <span class="badge bg-warning text-dark">Comercial</span>
+                            {% else %}
+                                <span class="badge bg-info text-dark">Desarrollador</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ u.fecha_creacion.strftime('%Y-%m-%d') }}</td>
+                        <td class="text-end pe-4">
+                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalEditarUser{{ u.id }}">
+                                <i class="bi bi-pencil-fill me-1"></i>Editar
+                            </button>
+                        </td>
+                    </tr>
+
+                    <!-- Modal Editar Usuario -->
+                    <div class="modal fade" id="modalEditarUser{{ u.id }}" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <form method="POST" action="{{ url_for('auth.edit_user', user_id=u.id) }}">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title fw-bold">Editar Usuario: {{ u.nombre }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="mb-3 text-start">
+                                            <label class="form-label fw-semibold">Nombre Completo</label>
+                                            <input type="text" name="nombre" class="form-control" value="{{ u.nombre }}" required>
+                                        </div>
+                                        <div class="mb-3 text-start">
+                                            <label class="form-label fw-semibold">Rol del Sistema</label>
+                                            <select name="rol" class="form-select" required>
+                                                {% for r in roles %}
+                                                <option value="{{ r }}" {% if u.rol == r %}selected{% endif %}>{{ r|capitalize }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="mb-3 text-start">
+                                            <label class="form-label fw-semibold">Nueva Contraseña (Opcional)</label>
+                                            <input type="password" name="password" class="form-control" placeholder="Dejar en blanco si no cambia">
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo Usuario -->
+<div class="modal fade" id="modalNuevoUsuario" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('auth.manage_users') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Crear Nuevo Usuario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nombre Completo</label>
+                        <input type="text" name="nombre" class="form-control" placeholder="Juan Pérez" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Correo Electrónico</label>
+                        <input type="email" name="email" class="form-control" placeholder="juan@empresa.com" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Contraseña</label>
+                        <input type="password" name="password" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Rol Asignado</label>
+                        <select name="rol" class="form-select" required>
+                            {% for r in roles %}
+                            <option value="{{ r }}">{{ r|capitalize }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Registrar Usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

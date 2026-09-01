@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}{{ proyecto.nombre }} - Detalle del Proyecto{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1">
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}">Proyectos</a></li>
+                <li class="breadcrumb-item active" aria-current="page">{{ proyecto.nombre }}</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold mb-0">{{ proyecto.nombre }}</h2>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('projects.kanban_project', project_id=proyecto.id) }}" class="btn btn-outline-primary">
+            <i class="bi bi-kanban me-2"></i>Vista Kanban
+        </a>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaMacrotarea">
+            <i class="bi bi-plus-circle me-2"></i>Nueva Macrotarea
+        </button>
+    </div>
+</div>
+
+<p class="text-muted mb-4">{{ proyecto.descripcion or 'Sin descripción.' }}</p>
+
+<!-- Acordeón de Macrotareas y Tareas -->
+<div class="accordion shadow-sm rounded-3" id="accordionMacrotareas">
+    {% for mt in proyecto.macrotareas %}
+    <div class="accordion-item border-0 border-bottom">
+        <h2 class="accordion-header" id="heading{{ mt.id }}">
+            <button class="accordion-button {% if not loop.first %}collapsed{% endif %} fw-bold py-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ mt.id }}">
+                <i class="bi bi-diagram-3-fill text-primary me-2"></i>{{ mt.nombre }}
+                <span class="badge bg-secondary ms-3">{{ mt.tareas|length }} Tareas</span>
+            </button>
+        </h2>
+        <div id="collapse{{ mt.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" data-bs-parent="#accordionMacrotareas">
+            <div class="accordion-body bg-light p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold text-secondary mb-0">Tareas asociadas</h6>
+                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevaTarea{{ mt.id }}">
+                        <i class="bi bi-plus-lg me-1"></i>Agregar Tarea
+                    </button>
+                </div>
+
+                {% if mt.tareas %}
+                <div class="list-group shadow-sm">
+                    {% for t in mt.tareas %}
+                    <div class="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center">
+                        <div class="me-3 flex-grow-1">
+                            <div class="d-flex align-items-center mb-1">
+                                <a href="{{ url_for('projects.detail_task', task_id=t.id) }}" class="fw-bold text-dark text-decoration-none me-2">
+                                    {{ t.titulo }}
+                                </a>
+                                <span class="badge bg-{% if t.estado == 'Completada' %}success{% elif t.estado == 'En Progreso' %}primary{% elif t.estado == 'Bloqueada' %}danger{% else %}warning text-dark{% endif %}" id="task-status-badge-{{ t.id }}">
+                                    {{ t.estado }}
+                                </span>
+                            </div>
+                            <small class="text-muted d-block mb-2">
+                                <i class="bi bi-person me-1"></i>Responsable: {{ t.responsable.nombre if t.responsable else 'Sin Asignar' }}
+                                {% if t.fecha_limite %} | <i class="bi bi-calendar-event me-1"></i>Límite: {{ t.fecha_limite.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+                            </small>
+
+                            <!-- Barra de progreso interactiva -->
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress flex-grow-1" style="height: 8px;">
+                                    <div id="task-progress-{{ t.id }}" class="progress-bar bg-success" role="progressbar" style="width: {{ t.porcentaje_avance }}%" aria-valuenow="{{ t.porcentaje_avance }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <span class="small fw-bold text-muted" id="task-progress-text-{{ t.id }}">{{ t.porcentaje_avance }}%</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <a href="{{ url_for('projects.detail_task', task_id=t.id) }}" class="btn btn-sm btn-outline-secondary">
+                                Details <i class="bi bi-gear-fill ms-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted small mb-0 fst-italic">No hay tareas creadas en esta macrotarea.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Crear Tarea en Macrotarea -->
+    <div class="modal fade" id="modalNuevaTarea{{ mt.id }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url_for('projects.create_task', project_id=proyecto.id) }}">
+                    <input type="hidden" name="macrotarea_id" value="{{ mt.id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title fw-bold">Nueva Tarea en {{ mt.nombre }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-start">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Título de la Tarea</label>
+                            <input type="text" name="titulo" class="form-control" placeholder="Ej. Diseño de base de datos" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Descripción</label>
+                            <textarea name="descripcion" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Asignar Responsable</label>
+                            <select name="responsable_id" class="form-select">
+                                <option value="">-- Sin Asignar --</option>
+                                {% for u in usuarios %}
+                                <option value="{{ u.id }}">{{ u.nombre }} ({{ u.rol }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Fecha Límite</label>
+                            <input type="datetime-local" name="fecha_limite" class="form-control">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Crear Tarea</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="p-5 text-center bg-white rounded-3 shadow-sm text-muted">
+        <i class="bi bi-diagram-3 display-4 text-secondary mb-2 d-block"></i>
+        <h5>Este proyecto aún no tiene Macrotareas</h5>
+        <p>Crea la primera macrotarea para organizar las actividades.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Modal Nueva Macrotarea -->
+<div class="modal fade" id="modalNuevaMacrotarea" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('projects.create_macrotask', project_id=proyecto.id) }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Nueva Macrotarea</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nombre de la Macrotarea</label>
+                        <input type="text" name="nombre" class="form-control" placeholder="Ej. Fase 1: Arquitectura" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Macrotarea</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

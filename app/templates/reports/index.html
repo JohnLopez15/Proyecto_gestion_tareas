@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Reportes Globales - TaskFlow Pro{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-bar-chart-line-fill text-primary me-2"></i>Reportes Globales de Gestión</h2>
+        <p class="text-muted">Análisis consolidado de rendimiento comercial y seguimiento de jornadas por usuario.</p>
+    </div>
+</div>
+
+<!-- Filtros de Búsqueda -->
+<div class="card shadow-sm border-0 rounded-4 mb-4">
+    <div class="card-body p-4">
+        <form method="GET" action="{{ url_for('reports.index') }}" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Usuario</label>
+                <select name="usuario_id" class="form-select">
+                    <option value="">-- Todos los Usuarios --</option>
+                    {% for u in usuarios %}
+                    <option value="{{ u.id }}" {% if usuario_id_sel == u.id %}selected{% endif %}>{{ u.nombre }} ({{ u.rol }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Fecha Inicio</label>
+                <input type="date" name="fecha_inicio" class="form-control" value="{{ fecha_inicio_sel }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Fecha Fin</label>
+                <input type="date" name="fecha_fin" class="form-control" value="{{ fecha_fin_sel }}">
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary fw-bold flex-grow-1"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+                <a href="{{ url_for('reports.index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-counterclockwise"></i></a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Totales Comerciales -->
+<div class="row g-3 mb-4">
+    <div class="col-md">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-warning p-3">
+            <span class="text-muted small fw-bold text-uppercase">Total Llamadas</span>
+            <h3 class="fw-bold mb-0 text-dark">{{ totales_comerciales.llamadas }}</h3>
+        </div>
+    </div>
+    <div class="col-md">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-success p-3">
+            <span class="text-muted small fw-bold text-uppercase">Total WhatsApp</span>
+            <h3 class="fw-bold mb-0 text-dark">{{ totales_comerciales.whatsapp }}</h3>
+        </div>
+    </div>
+    <div class="col-md">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-primary p-3">
+            <span class="text-muted small fw-bold text-uppercase">Total LinkedIn</span>
+            <h3 class="fw-bold mb-0 text-dark">{{ totales_comerciales.linkedin }}</h3>
+        </div>
+    </div>
+    <div class="col-md">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-info p-3">
+            <span class="text-muted small fw-bold text-uppercase">Total Correos</span>
+            <h3 class="fw-bold mb-0 text-dark">{{ totales_comerciales.correos }}</h3>
+        </div>
+    </div>
+    <div class="col-md">
+        <div class="card border-0 shadow-sm rounded-3 bg-white border-start border-4 border-danger p-3">
+            <span class="text-muted small fw-bold text-uppercase">Ofertas Enviadas</span>
+            <h3 class="fw-bold mb-0 text-primary">{{ totales_comerciales.ofertas_enviadas }}</h3>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla Detallada de Jornadas -->
+<div class="card shadow-sm border-0 rounded-4">
+    <div class="card-header bg-white py-3 border-0">
+        <h5 class="fw-bold mb-0 text-dark">Detalle de Jornadas y Registro Comercial</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Fecha</th>
+                        <th>Usuario</th>
+                        <th>Rol</th>
+                        <th>Estado Jornada</th>
+                        <th>Tareas Trabajadas</th>
+                        <th>Llamadas</th>
+                        <th>WhatsApp</th>
+                        <th>LinkedIn</th>
+                        <th>Correos</th>
+                        <th class="pe-4">Ofertas</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for j in jornadas %}
+                    <tr>
+                        <td class="ps-4 fw-bold">{{ j.fecha.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ j.usuario.nombre }}</td>
+                        <td><span class="badge bg-secondary">{{ j.usuario.rol }}</span></td>
+                        <td>
+                            <span class="badge bg-{% if j.estado == 'Abierta' %}success{% else %}secondary{% endif %}">{{ j.estado }}</span>
+                        </td>
+                        <td>{{ j.tareas_dia|length }} Tareas</td>
+                        {% set comm = j.registro_comercial %}
+                        {% if comm %}
+                        <td>{{ comm.llamadas }}</td>
+                        <td>{{ comm.whatsapp }}</td>
+                        <td>{{ comm.linkedin }}</td>
+                        <td>{{ comm.correos }}</td>
+                        <td class="pe-4 fw-bold text-primary">{{ comm.ofertas_enviadas }}</td>
+                        {% else %}
+                        <td colspan="5" class="text-muted small fst-italic pe-4">Sin registro comercial</td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">No se encontraron jornadas en el rango seleccionado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

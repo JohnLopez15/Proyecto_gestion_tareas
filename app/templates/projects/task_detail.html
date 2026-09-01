@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Tarea: {{ tarea.titulo }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1">
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.list_projects') }}">Proyectos</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.detail_project', project_id=tarea.macrotarea.proyecto.id) }}">{{ tarea.macrotarea.proyecto.nombre }}</a></li>
+                <li class="breadcrumb-item active">{{ tarea.titulo }}</li>
+            </ol>
+        </nav>
+        <h2 class="fw-bold mb-0"><i class="bi bi-card-checklist text-primary me-2"></i>{{ tarea.titulo }}</h2>
+    </div>
+    <span class="badge bg-{% if tarea.estado == 'Completada' %}success{% elif tarea.estado == 'En Progreso' %}primary{% elif tarea.estado == 'Bloqueada' %}danger{% else %}warning text-dark{% endif %} fs-6 px-3 py-2" id="task-status-badge-{{ tarea.id }}">
+        {{ tarea.estado }}
+    </span>
+</div>
+
+<div class="row g-4">
+    <!-- Columna Izquierda: Edición y Checklist -->
+    <div class="col-lg-7">
+        <!-- Formulario de Edición Principal -->
+        <div class="card shadow-sm border-0 rounded-4 mb-4">
+            <div class="card-header bg-white py-3 border-0">
+                <h5 class="fw-bold mb-0 text-dark">Información de la Tarea</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('projects.detail_task', task_id=tarea.id) }}">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Título</label>
+                        <input type="text" name="titulo" class="form-control" value="{{ tarea.titulo }}" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Descripción</label>
+                        <textarea name="descripcion" class="form-control" rows="3">{{ tarea.descripcion or '' }}</textarea>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Estado</label>
+                            <select name="estado" class="form-select">
+                                {% for est in estados %}
+                                <option value="{{ est }}" {% if tarea.estado == est %}selected{% endif %}>{{ est }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Responsable</label>
+                            <select name="responsable_id" class="form-select">
+                                <option value="">-- Sin Asignar --</option>
+                                {% for u in usuarios %}
+                                <option value="{{ u.id }}" {% if tarea.responsable_id == u.id %}selected{% endif %}>{{ u.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Fecha Límite</label>
+                        <input type="datetime-local" name="fecha_limite" class="form-control" value="{{ tarea.fecha_limite.strftime('%Y-%m-%dT%H:%M') if tarea.fecha_limite else '' }}">
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Sobrescritura Manual de Porcentaje -->
+                    <div class="mb-3 bg-light p-3 rounded-3">
+                        <label class="form-label fw-semibold text-dark d-flex justify-content-between">
+                            <span>Porcentaje de Avance (Actual: <strong id="task-progress-text-{{ tarea.id }}">{{ tarea.porcentaje_avance }}%</strong>)</span>
+                        </label>
+                        <div class="progress mb-3" style="height: 12px;">
+                            <div id="task-progress-{{ tarea.id }}" class="progress-bar bg-success" style="width: {{ tarea.porcentaje_avance }}%"></div>
+                        </div>
+
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-4">
+                                <input type="number" name="porcentaje_avance" min="0" max="100" class="form-control" value="{{ tarea.porcentaje_avance }}" placeholder="0-100">
+                            </div>
+                            <div class="col-md-8">
+                                <input type="text" name="comentario_justificacion" class="form-control" placeholder="Comentario si difiere del cálculo...">
+                            </div>
+                            <small class="text-muted mt-1">* Si el porcentaje ingresado difiere del checklist, el comentario es obligatorio.</small>
+                        </div>
+                    </div>
+
+                    <div class="text-end">
+                        <button type="submit" class="btn btn-primary fw-bold">
+                            <i class="bi bi-save me-2"></i>Guardar Cambios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Lista de Chequeo (Checklist) -->
+        <div class="card shadow-sm border-0 rounded-4">
+            <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-check2-square text-success me-2"></i>Checklist de Subtareas</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('projects.add_checklist_item', task_id=tarea.id) }}" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" name="descripcion" class="form-control" placeholder="Agregar nuevo ítem de checklist..." required>
+                        <button class="btn btn-success" type="submit"><i class="bi bi-plus-lg me-1"></i>Agregar</button>
+                    </div>
+                </form>
+
+                <ul class="list-group list-group-flush" id="checklistGroup">
+                    {% for item in tarea.checklists %}
+                    <li class="list-group-item d-flex align-items-center justify-content-between py-2 border-0 border-bottom">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="check-{{ item.id }}" {% if item.completado %}checked{% endif %} onchange="toggleChecklistItem({{ tarea.id }}, {{ item.id }})">
+                            <label class="form-check-label {% if item.completado %}text-decoration-line-through text-muted{% endif %}" for="check-{{ item.id }}">
+                                {{ item.descripcion }}
+                            </label>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-center text-muted border-0 py-3">No hay ítems en la checklist aún.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna Derecha: Historial de Cambios (Audit Log) -->
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 rounded-4">
+            <div class="card-header bg-white py-3 border-0">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-journal-text text-info me-2"></i>Historial de Auditoría (Audit Log)</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if auditorias %}
+                <div class="list-group list-group-flush">
+                    {% for a in auditorias %}
+                    <div class="list-group-item p-3 border-0 border-bottom">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <span class="badge bg-light text-dark border fw-semibold">{{ a.campo_modificado }}</span>
+                            <small class="text-muted">{{ a.fecha.strftime('%Y-%m-%d %H:%M') }}</small>
+                        </div>
+                        <div class="small">
+                            <span class="text-danger text-decoration-line-through me-2">{{ a.valor_anterior or 'Vacío' }}</span>
+                            <i class="bi bi-arrow-right text-muted me-2"></i>
+                            <span class="text-success fw-bold">{{ a.valor_nuevo or 'Vacío' }}</span>
+                        </div>
+                        <small class="text-muted d-block mt-1"><i class="bi bi-person me-1"></i>Modificado por: {{ a.usuario.nombre }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="p-4 text-center text-muted">
+                    <i class="bi bi-clock-history fs-2 text-secondary d-block mb-2"></i>
+                    No hay registro de cambios para esta tarea.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
