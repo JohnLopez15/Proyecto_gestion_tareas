@@ -5,7 +5,7 @@ from app import db
 from app.projects import projects_bp
 from app.models import (
     Project, MacroTask, Task, Checklist, User, AuditLog,
-    Notification, NotificationType, TaskState
+    Notification, NotificationType, TaskState, TaskComment
 )
 
 
@@ -42,7 +42,36 @@ def list_projects():
             return redirect(url_for('projects.list_projects'))
 
     proyectos = Project.query.order_by(Project.fecha_creacion.desc()).all()
-    return render_template('projects/list.html', proyectos=proyectos)
+    macrotareas_independientes = MacroTask.query.filter_by(proyecto_id=None).all()
+    todos_proyectos = Project.query.order_by(Project.nombre).all()
+    usuarios = User.query.order_by(User.nombre).all()
+
+    return render_template(
+        'projects/list.html',
+        proyectos=proyectos,
+        macrotareas_independientes=macrotareas_independientes,
+        todos_proyectos=todos_proyectos,
+        usuarios=usuarios
+    )
+
+
+@projects_bp.route('/macrotasks/create', methods=['POST'])
+@login_required
+def create_standalone_macrotask():
+    nombre = request.form.get('nombre', '').strip()
+    proyecto_id = request.form.get('proyecto_id', type=int)
+    if not nombre:
+        flash('El nombre de la macrotarea no puede estar vacío.', 'danger')
+    else:
+        macrotarea = MacroTask(proyecto_id=proyecto_id if proyecto_id else None, nombre=nombre)
+        db.session.add(macrotarea)
+        db.session.commit()
+        if proyecto_id:
+            flash(f'Macrotarea "{nombre}" agregada al proyecto.', 'success')
+            return redirect(url_for('projects.detail_project', project_id=proyecto_id))
+        else:
+            flash(f'Macrotarea independiente "{nombre}" creada con éxito.', 'success')
+    return redirect(url_for('projects.list_projects'))
 
 
 @projects_bp.route('/projects/<int:project_id>')
@@ -69,19 +98,21 @@ def create_macrotask(project_id):
     return redirect(url_for('projects.detail_project', project_id=project_id))
 
 
+@projects_bp.route('/tasks/create', methods=['POST'])
 @projects_bp.route('/projects/<int:project_id>/task', methods=['POST'])
 @login_required
-def create_task(project_id):
-    proyecto = Project.query.get_or_404(project_id)
+def create_task(project_id=None):
     macrotarea_id = request.form.get('macrotarea_id', type=int)
     titulo = request.form.get('titulo', '').strip()
     descripcion = request.form.get('descripcion', '').strip()
     responsable_id = request.form.get('responsable_id', type=int)
     fecha_limite_str = request.form.get('fecha_limite')
 
-    if not macrotarea_id or not titulo:
-        flash('Debe seleccionar una macrotarea y especificar el título.', 'danger')
-        return redirect(url_for('projects.detail_project', project_id=project_id))
+    if not titulo:
+        flash('El título de la tarea es obligatorio.', 'danger')
+        if project_id:
+            return redirect(url_for('projects.detail_project', project_id=project_id))
+        return redirect(url_for('projects.list_projects'))
 
     fecha_limite = None
     if fecha_limite_str:
@@ -94,7 +125,7 @@ def create_task(project_id):
                 pass
 
     tarea = Task(
-        macrotarea_id=macrotarea_id,
+        macrotarea_id=macrotarea_id if macrotarea_id else None,
         creador_id=current_user.id,
         responsable_id=responsable_id if responsable_id else None,
         titulo=titulo,
@@ -114,7 +145,9 @@ def create_task(project_id):
 
     db.session.commit()
     flash(f'Tarea "{titulo}" creada exitosamente.', 'success')
-    return redirect(url_for('projects.detail_project', project_id=project_id))
+    if project_id:
+        return redirect(url_for('projects.detail_project', project_id=project_id))
+    return redirect(url_for('projects.list_projects'))
 
 
 @projects_bp.route('/projects/<int:project_id>/kanban')
@@ -236,5 +269,22 @@ def add_checklist_item(task_id):
             registrar_auditoria(tarea.id, current_user.id, 'porcentaje_avance', f"{pct_ant}%", f"{pct_nuev}% (Auto por Checklist)")
         db.session.commit()
         flash('Ítem de checklist añadido.', 'success')
+    return redirect(url_for('projects.detail_task', task_id=task_id))
+
+
+@projects_bp.route('/task/<int:task_id>/comment', methods=['POST'])
+@login_required
+def add_task_comment(task_id):
+    tarea = Task.query.get_or_404(task_id)
+    comentario_txt = request.form.get('comentario', '').strip()
+    if comentario_txt:
+        nuevo_comentario = TaskComment(
+            tarea_id=tarea.id,
+            usuario_id=current_user.id,
+            comentario=comentario_txt
+        )
+        db.session.add(nuevo_comentario)
+        db.session.commit()
+        flash('Comentario agregado a la tarea.', 'success')
     return redirect(url_for('projects.detail_task', task_id=task_id))
 

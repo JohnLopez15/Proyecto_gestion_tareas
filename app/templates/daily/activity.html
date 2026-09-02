@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Visor de Actividades Diarias - TaskFlow Pro{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1"><i class="bi bi-clock-history text-primary me-2"></i>Visor de Actividades Diarias</h2>
+        <p class="text-muted">Consulta las tareas realizadas, porcentajes de avance y comentarios de cierre por usuario y fecha.</p>
+    </div>
+</div>
+
+<!-- Filtros de Fecha y Usuario -->
+<div class="card shadow-sm border-0 rounded-4 mb-4">
+    <div class="card-body p-4">
+        <form method="GET" action="{{ url_for('daily.activity_viewer') }}" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Fecha de la Jornada</label>
+                <input type="date" name="fecha" class="form-control" value="{{ fecha_sel }}">
+            </div>
+            <div class="col-md-5">
+                <label class="form-label fw-semibold">Usuario</label>
+                <select name="usuario_id" class="form-select">
+                    <option value="">-- Todos los Usuarios --</option>
+                    {% for u in usuarios %}
+                    <option value="{{ u.id }}" {% if usuario_id_sel == u.id %}selected{% endif %}>{{ u.nombre }} ({{ u.rol|capitalize }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary fw-bold flex-grow-1"><i class="bi bi-search me-1"></i>Consultar</button>
+                <a href="{{ url_for('daily.activity_viewer') }}" class="btn btn-outline-secondary" title="Hoy"><i class="bi bi-calendar-day"></i></a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Listado de Actividades por Jornada -->
+{% if jornadas %}
+    {% for j in jornadas %}
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-person-circle text-primary me-2"></i>{{ j.usuario.nombre }}
+                    <span class="badge bg-secondary ms-2 small">{{ j.usuario.rol|capitalize }}</span>
+                </h5>
+                <small class="text-muted"><i class="bi bi-calendar-event me-1"></i>Fecha: {{ j.fecha.strftime('%d/%m/%Y') }}</small>
+            </div>
+            <div>
+                <span class="badge bg-{% if j.estado == 'Abierta' %}success{% else %}secondary{% endif %} p-2">
+                    Estado Jornada: {{ j.estado }}
+                </span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Tarea Trabajada</th>
+                            <th>Proyecto / Macrotarea</th>
+                            <th>Avance</th>
+                            <th>Estado</th>
+                            <th>Resolución</th>
+                            <th class="pe-4" style="min-width: 250px;">Comentario de la Tarea</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dt in j.tareas_dia %}
+                        {% set t = dt.tarea %}
+                        <tr>
+                            <td class="ps-4 fw-bold">
+                                <a href="{{ url_for('projects.detail_task', task_id=t.id) }}" class="text-dark text-decoration-none">
+                                    {{ t.titulo }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if t.macrotarea %}
+                                    {% if t.macrotarea.proyecto %}
+                                        <span class="badge bg-light text-dark border">{{ t.macrotarea.proyecto.nombre }} / {{ t.macrotarea.nombre }}</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-dark border">{{ t.macrotarea.nombre }} (Sin Proyecto)</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-light text-secondary border">Sin Macrotarea</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2" style="min-width: 120px;">
+                                    <div class="progress flex-grow-1" style="height: 6px;">
+                                        <div class="progress-bar bg-success" style="width: {{ dt.porcentaje_al_cierre if dt.porcentaje_al_cierre is not none else t.porcentaje_avance }}%"></div>
+                                    </div>
+                                    <span class="small fw-bold">{{ dt.porcentaje_al_cierre if dt.porcentaje_al_cierre is not none else t.porcentaje_avance }}%</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if t.estado == 'Completada' %}success{% elif t.estado == 'En Progreso' %}primary{% elif t.estado == 'Bloqueada' %}danger{% else %}warning text-dark{% endif %}">
+                                    {{ t.estado }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if dt.accion_resolucion %}
+                                    {% if dt.accion_resolucion == 'reprogramar' %}
+                                        <span class="badge bg-info text-dark">Reprogramada</span>
+                                    {% elif dt.accion_resolucion == 'backlog' %}
+                                        <span class="badge bg-secondary">A Backlog</span>
+                                    {% elif dt.accion_resolucion == 'cancelar' %}
+                                        <span class="badge bg-danger">Cancelada</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="pe-4">
+                                {% if dt.comentario %}
+                                    <div class="small bg-light p-2 rounded border">
+                                        <i class="bi bi-chat-left-text me-1 text-primary"></i>{{ dt.comentario }}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted small fst-italic">Sin comentario registrado</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-3">No hubo tareas registradas en esta jornada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if j.registro_comercial %}
+            <div class="p-3 bg-light border-top d-flex flex-wrap gap-4 text-muted small">
+                <span class="fw-bold text-dark"><i class="bi bi-telephone-out-fill text-warning me-1"></i>Métricas Comerciales:</span>
+                <span>Llamadas: <strong>{{ j.registro_comercial.llamadas }}</strong></span>
+                <span>WhatsApp: <strong>{{ j.registro_comercial.whatsapp }}</strong></span>
+                <span>LinkedIn: <strong>{{ j.registro_comercial.linkedin }}</strong></span>
+                <span>Correos: <strong>{{ j.registro_comercial.correos }}</strong></span>
+                <span>Ofertas: <strong class="text-primary">{{ j.registro_comercial.ofertas_enviadas }}</strong></span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+<div class="card shadow-sm border-0 rounded-4 p-5 text-center text-muted">
+    <i class="bi bi-calendar-x display-3 mb-3 text-secondary"></i>
+    <h4>No hay jornadas registradas para esta fecha</h4>
+    <p>Selecciona otra fecha en el filtro superior para consultar las actividades de los colaboradores.</p>
+</div>
+{% endif %}
+{% endblock %}
+

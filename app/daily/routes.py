@@ -5,7 +5,7 @@ from app import db
 from app.daily import daily_bp
 from app.models import (
     DailyLog, DailyLogState, DailyLogTask, Task, TaskState,
-    CommercialLog, UserRole, MacroTask, AuditLog
+    CommercialLog, UserRole, MacroTask, AuditLog, Project, User, TaskComment
 )
 from app.projects.routes import registrar_auditoria
 
@@ -21,12 +21,14 @@ def index():
         Task.estado != TaskState.COMPLETADA.value
     ).all()
 
+    proyectos = Project.query.order_by(Project.nombre).all()
     macrotareas = MacroTask.query.all()
 
     return render_template(
         'daily/index.html',
         jornada=jornada,
         tareas_disponibles=tareas_disponibles,
+        proyectos=proyectos,
         macrotareas=macrotareas,
         hoy=hoy
     )
@@ -55,9 +57,9 @@ def start_day():
     titulo_imprevista = request.form.get('titulo_imprevista', '').strip()
     macrotarea_imprevista_id = request.form.get('macrotarea_imprevista_id', type=int)
 
-    if titulo_imprevista and macrotarea_imprevista_id:
+    if titulo_imprevista:
         tarea_imp = Task(
-            macrotarea_id=macrotarea_imprevista_id,
+            macrotarea_id=macrotarea_imprevista_id if macrotarea_imprevista_id else None,
             creador_id=current_user.id,
             responsable_id=current_user.id,
             titulo=f"[Imprevista] {titulo_imprevista}",
@@ -113,17 +115,47 @@ def close_day():
         flash('No se encontró una jornada abierta para cerrar hoy.', 'warning')
         return redirect(url_for('daily.index'))
 
-    comentario_cierre = request.form.get('comentario_cierre', '').strip()
-    if not comentario_cierre:
-        flash('Es obligatorio dejar un comentario general de cierre del día.', 'danger')
-        return redirect(url_for('daily.index'))
-
+    # 1. Validar que cada tarea tenga su comentario obligatorio
     for dt in jornada.tareas_dia:
         tarea = dt.tarea
-        accion = request.form.get(f'resolucion_tarea_{tarea.id}')
-        dt.porcentaje_al_cierre = tarea.porcentaje_avance
+        comentario_tarea = request.form.get(f'comentario_tarea_{tarea.id}', '').strip()
+        if not comentario_tarea:
+            flash(f'Es obligatorio ingresar un comentario de cierre para la tarea "{tarea.titulo}".', 'danger')
+            return redirect(url_for('daily.index'))
 
+    # 2. Procesar actualización de tareas existentes
+    for dt in jornada.tareas_dia:
+        tarea = dt.tarea
+        comentario_tarea = request.form.get(f'comentario_tarea_{tarea.id}', '').strip()
+        completar_directo = request.form.get(f'completar_tarea_{tarea.id}')
+
+        # Actualizar checklists si se modificaron desde el modal de cierre
+        if tarea.checklists:
+            for item in tarea.checklists:
+                esta_marcado = True if request.form.get(f'checklist_item_{item.id}') else False
+                item.completado = esta_marcado
+            tarea.recalcular_porcentaje()
+
+        if completar_directo:
+            tarea.porcentaje_avance = 100
+            tarea.estado = TaskState.COMPLETADA.value
+            for item in tarea.checklists:
+                item.completado = True
+
+        dt.porcentaje_al_cierre = tarea.porcentaje_avance
+        dt.comentario = comentario_tarea
+
+        # Guardar comentario en el historial permanente de la tarea
+        task_comment = TaskComment(
+            tarea_id=tarea.id,
+            usuario_id=current_user.id,
+            comentario=f"[Cierre Jornada {hoy.strftime('%Y-%m-%d')}]: {comentario_tarea}"
+        )
+        db.session.add(task_comment)
+
+        # Si no llegó al 100%, procesar resolución
         if tarea.porcentaje_avance < 100:
+            accion = request.form.get(f'resolucion_tarea_{tarea.id}')
             if not accion:
                 flash(f'Debe seleccionar una acción de resolución para la tarea incompleta: "{tarea.titulo}".', 'danger')
                 return redirect(url_for('daily.index'))
@@ -142,6 +174,42 @@ def close_day():
                 tarea.estado = TaskState.BLOQUEADA.value
                 registrar_auditoria(tarea.id, current_user.id, 'estado', est_ant, 'Bloqueada/Cancelada')
 
+    # 3. Procesar tarea imprevista al momento de finalizar jornada si fue provista
+    titulo_imprevista_cierre = request.form.get('titulo_imprevista_cierre', '').strip()
+    if titulo_imprevista_cierre:
+        macrotarea_cierre_id = request.form.get('macrotarea_imprevista_cierre_id', type=int)
+        completar_imp = True if request.form.get('completada_imprevista_cierre') else False
+        pct_imp = 100 if completar_imp else request.form.get('porcentaje_imprevista_cierre', type=int, default=100)
+        comentario_imp = request.form.get('comentario_imprevista_cierre', '').strip() or 'Tarea imprevista realizada y finalizada en la jornada.'
+
+        tarea_imp = Task(
+            macrotarea_id=macrotarea_cierre_id if macrotarea_cierre_id else None,
+            creador_id=current_user.id,
+            responsable_id=current_user.id,
+            titulo=f"[Imprevista] {titulo_imprevista_cierre}",
+            estado=TaskState.COMPLETADA.value if pct_imp == 100 else TaskState.EN_PROGRESO.value,
+            porcentaje_avance=pct_imp
+        )
+        db.session.add(tarea_imp)
+        db.session.flush()
+
+        dt_imp = DailyLogTask(
+            jornada_id=jornada.id,
+            tarea_id=tarea_imp.id,
+            porcentaje_al_cierre=pct_imp,
+            comentario=comentario_imp,
+            accion_resolucion='reprogramar' if pct_imp < 100 else None
+        )
+        db.session.add(dt_imp)
+
+        task_comment_imp = TaskComment(
+            tarea_id=tarea_imp.id,
+            usuario_id=current_user.id,
+            comentario=f"[Cierre Jornada {hoy.strftime('%Y-%m-%d')}]: {comentario_imp}"
+        )
+        db.session.add(task_comment_imp)
+
+    # 4. Procesar registro comercial si corresponde
     if current_user.rol == UserRole.COMERCIAL.value:
         llamadas = request.form.get('llamadas', type=int, default=0)
         whatsapp = request.form.get('whatsapp', type=int, default=0)
@@ -160,12 +228,42 @@ def close_day():
         comm_log.correos = correos
         comm_log.ofertas_enviadas = ofertas
 
-    jornada.comentario_cierre = comentario_cierre
+    jornada.comentario_cierre = "Jornada cerrada con comentarios por tarea."
     jornada.estado = DailyLogState.CERRADA.value
 
     db.session.commit()
-    flash('Jornada diaria cerrada exitosamente. ¡Excelente trabajo hoy!', 'success')
+    flash('Jornada diaria cerrada exitosamente con los comentarios registrados en cada tarea.', 'success')
     return redirect(url_for('daily.index'))
+
+
+@daily_bp.route('/daily/activity')
+@login_required
+def activity_viewer():
+    fecha_str = request.args.get('fecha')
+    usuario_id = request.args.get('usuario_id', type=int)
+
+    if fecha_str:
+        try:
+            fecha_sel = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_sel = datetime.now(timezone.utc).date()
+    else:
+        fecha_sel = datetime.now(timezone.utc).date()
+
+    query = DailyLog.query.filter_by(fecha=fecha_sel)
+    if usuario_id:
+        query = query.filter_by(usuario_id=usuario_id)
+
+    jornadas = query.order_by(DailyLog.usuario_id).all()
+    usuarios = User.query.order_by(User.nombre).all()
+
+    return render_template(
+        'daily/activity.html',
+        jornadas=jornadas,
+        usuarios=usuarios,
+        fecha_sel=fecha_sel.strftime('%Y-%m-%d'),
+        usuario_id_sel=usuario_id
+    )
 
 
 @daily_bp.route('/daily/commercial/edit/<int:log_id>', methods=['POST'])

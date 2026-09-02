@@ -89,7 +89,7 @@ class MacroTask(db.Model):
     __tablename__ = 'macrotasks'
 
     id = db.Column(db.Integer, primary_key=True)
-    proyecto_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    proyecto_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
     nombre = db.Column(db.String(150), nullable=False)
     estado = db.Column(db.String(50), nullable=False, default='Pendiente')
 
@@ -100,7 +100,7 @@ class Task(db.Model):
     __tablename__ = 'tasks'
 
     id = db.Column(db.Integer, primary_key=True)
-    macrotarea_id = db.Column(db.Integer, db.ForeignKey('macrotasks.id'), nullable=False)
+    macrotarea_id = db.Column(db.Integer, db.ForeignKey('macrotasks.id'), nullable=True)
     creador_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     responsable_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     titulo = db.Column(db.String(200), nullable=False)
@@ -126,6 +126,19 @@ class Task(db.Model):
         elif nuevo_porcentaje > 0 and self.estado == TaskState.PENDIENTE.value:
             self.estado = TaskState.EN_PROGRESO.value
         return nuevo_porcentaje
+
+
+class TaskComment(db.Model):
+    __tablename__ = 'task_comments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tarea_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    comentario = db.Column(db.Text, nullable=False)
+    fecha = db.Column(db.DateTime, default=utc_now)
+
+    usuario = db.relationship('User', backref='comentarios_tareas', lazy=True)
+    tarea = db.relationship('Task', backref=db.backref('comentarios', cascade='all, delete-orphan'), lazy=True)
 
 
 class Checklist(db.Model):
@@ -158,6 +171,7 @@ class DailyLogTask(db.Model):
     tarea_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=False)
     accion_resolucion = db.Column(db.String(50), nullable=True)  # reprogramar, backlog, cancelar
     porcentaje_al_cierre = db.Column(db.Integer, nullable=True)
+    comentario = db.Column(db.Text, nullable=True)
 
 
 class CommercialLog(db.Model):

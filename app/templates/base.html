@@ -74,8 +74,13 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'daily' in request.endpoint %}active{% endif %}" href="{{ url_for('daily.index') }}">
+                            <a class="nav-link {% if request.endpoint == 'daily.index' %}active{% endif %}" href="{{ url_for('daily.index') }}">
                                 <i class="bi bi-calendar-check me-2"></i>Jornada Diaria
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'daily.activity_viewer' %}active{% endif %}" href="{{ url_for('daily.activity_viewer') }}">
+                                <i class="bi bi-clock-history me-2"></i>Visor de Actividades
                             </a>
                         </li>
                         {% if current_user.rol == 'admin' %}
